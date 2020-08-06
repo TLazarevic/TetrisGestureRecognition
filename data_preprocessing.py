@@ -1,9 +1,8 @@
 import pandas as pd
-import cv2
 import os
 pd.options.mode.chained_assignment = None  # default='warn'
 
-train_labels = pd.read_csv('../../jester-v1-train.csv', sep=';', names = ['Folder name', 'Gesture'])
+"""train_labels = pd.read_csv('../../jester-v1-train.csv', sep=';', names = ['Folder name', 'Gesture'])
 #print(train_labels.head())
 
 df_dict = {}
@@ -31,8 +30,18 @@ for key in df_dict:
     print('Ima: ' + str(ima) + " Nema: " + str(nema))
 
 for key in df_dict:
-    df_dict[key].to_pickle(str(key)+'.df.pickle')
-    
+    df_dict[key].to_pickle(str(key)+'.df.pickle')"""
+
+df_dict = {}
+df_dict['Swiping Down'] = train_labels[train_labels.Gesture == 'Swiping Down']
+df_dict['Swiping Up'] = train_labels[train_labels.Gesture == 'Swiping Up']
+df_dict['Swiping Left'] = train_labels[train_labels.Gesture == 'Swiping Left']
+df_dict['Swiping Right'] = train_labels[train_labels.Gesture == 'Swiping Right']
+df_dict['Thumb Down'] = train_labels[train_labels.Gesture == 'Thumb Down']
+
+df_dict['No gesture'] = train_labels[train_labels.Gesture == 'No gesture']
+df_dict['Doing other things'] = train_labels[train_labels.Gesture == 'Doing other things']
+
 """img_array = []
 for filename in os.listdir('../../20bn-jester-v2/'+str(754)):
     img = cv2.imread('../../20bn-jester-v2/'+str(754)+'/'+filename)
