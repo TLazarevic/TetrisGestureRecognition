@@ -28,6 +28,7 @@ from PIL import Image
 from spatial_transforms import *
 from sklearn.metrics import accuracy_score, precision_score, recall_score, classification_report, confusion_matrix
 from utils import *
+import keyboard
 
 
 def conv3x3x3(in_planes, out_planes, stride=1):
@@ -296,19 +297,42 @@ def load():
 
 def test(model):
 
+    # 1 Doing_other_things
+    # 2 Drumming_Fingers
+    # 3 No_gesture
+    # 4 Pulling_Hand_In
+    # 5 Pulling_Two_Fingers_In
+    # 6 Pushing_Hand_Away
+    # 7 Pushing_Two_Fingers_Away
+    # 8 Rolling_Hand_Backward
+    # 9 Rolling_Hand_Forward
+    # 10 Shaking_Hand
+    # 11 Sliding_Two_Fingers_Down
+    # 12 Sliding_Two_Fingers_Left
+    # 13 Sliding_Two_Fingers_Right
+    # 14 Sliding_Two_Fingers_Up
+    # 15 Stop_Sign
+    # 16 Swiping_Down
+    # 17 Swiping_Left
+    # 18 Swiping_Right
+    # 19 Swiping_Up
+    # 20 Thumb_Down
+    # 21 Thumb_Up
+    # 22 Turning_Hand_Clockwise
+    # 23 Turning_Hand_Counterclockwise
+    # 24 Zooming_In_With_Full_Hand
+    # 25 Zooming_In_With_Two_Fingers
+    # 26 Zooming_Out_With_Full_Hand
+    # 27 Zooming_Out_With_Two_Fingers
+
+
     path_vid =r"D:/20bn-jester-v2"
     BASE_PATH = "D:"
-    #path_model = os.path.join(data_root, data_model, model_name)
-    path_labels = BASE_PATH + '/jester-v1-labels.csv'
-    path_train =  BASE_PATH + '/jester-v1-train.csv'
-    path_test =  BASE_PATH + '/jester-v1-test.csv'
-    path_val = BASE_PATH + '/jester-v1-validation.csv'
-
     test_data = Jester(
             path_vid,
-            "jester.json",
+            "jester1.json",
             'test',
-            10,
+            1,
             spatial_transform= Compose([
     #Scale(opt.sample_size),
     Scale(112),
@@ -320,7 +344,7 @@ def test(model):
 
     test_loader = torch.utils.data.DataLoader(
             test_data,
-            batch_size=1,
+            batch_size=10,
             shuffle=False,
             num_workers=0,
             pin_memory=True)
@@ -338,11 +362,12 @@ def test(model):
     y_true = []
     y_pred = []
     end_time = time.time()
-    print(test_loader)
     for i, (inputs, targets) in enumerate(test_loader):
-        if i == 5:
+        torch.save(inputs, 'input_tensor.pt')
+        torch.save(targets, 'target_tensor.pt')
+        if i == 10:
             break
-        device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         targets = targets.to(device)
         #inputs = Variable(torch.squeeze(inputs), volatile=True)
         with torch.no_grad():
@@ -350,7 +375,9 @@ def test(model):
             targets = Variable(targets)
             start = time.time()
             outputs = model(inputs)
+            outputs.to(outputs)
             #outputs = F.softmax(outputs)
+            outputs = outputs[:,[0,2,15,16,17,18,19]] # only consider gestures we need
             print('Time = ' + str(time.time()-start))
             recorder.append(outputs.data.cpu().numpy().copy())
             print(targets)
@@ -360,15 +387,15 @@ def test(model):
     print(y_true)
     print(y_pred)
     
-    prec1, prec5 = calculate_accuracy(outputs, targets, topk=(1,5))
-    precision = calculate_precision(outputs, targets) #
-    recall = calculate_recall(outputs,targets)
+    # prec1, prec5 = calculate_accuracy(outputs, targets, topk=(1,5))
+    # precision = calculate_precision(outputs, targets) #
+    # recall = calculate_recall(outputs,targets)
 
 
-    top1.update(prec1, inputs.size(0))
-    top5.update(prec5, inputs.size(0))
-    precisions.update(precision, inputs.size(0))
-    recalls.update(recall,inputs.size(0))
+    # top1.update(prec1, inputs.size(0))
+    # top5.update(prec5, inputs.size(0))
+    # precisions.update(precision, inputs.size(0))
+    # recalls.update(recall,inputs.size(0))
 
     batch_time.update(time.time() - end_time)
     end_time = time.time()
@@ -398,6 +425,7 @@ def calculate_accuracy(outputs, targets, topk=(1,)):
         ret.append(correct_k / batch_size)
 
     return ret
+
 def calculate_precision(outputs, targets):
 
     _, pred = outputs.topk(1, 1, True)
@@ -411,5 +439,10 @@ def calculate_recall(outputs, targets):
     pred = pred.t()
     return  recall_score(targets.view(-1), pred.view(-1), average = 'macro')
 
+
+print('1')
+keyboard.press("left")
+time.sleep(0.05)
+keyboard.release("left")
 model = load()
 test(model)
