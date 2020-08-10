@@ -379,7 +379,7 @@ def train(model,params):
             sample_duration=16)
     val_loader =  torch.utils.data.DataLoader(
             train_data,
-            batch_size=128,
+            batch_size=64,
             shuffle=False,
             num_workers=0,
             pin_memory=True)
@@ -413,10 +413,11 @@ def train(model,params):
     for i in range(begin_epoch,200 + 1):
         train_epoch(i, train_loader, model, criterion, optimizer, 
                         train_logger, train_batch_logger)
-        validation_loss = val_epoch(i, val_loader, model, criterion, 
-                                        val_logger)
+        # validation_loss = val_epoch(i, val_loader, model, criterion, 
+        #                                 val_logger)
 
-        scheduler.step(validation_loss[0])
+        #scheduler.step(validation_loss[0])
+        scheduler.step(70)
 
     # test
     spatial_transform = Compose([
@@ -464,6 +465,20 @@ def train_epoch(epoch, data_loader, model, criterion, optimizer,
 
     end_time = time.time()
     for i, (inputs, targets) in enumerate(data_loader):
+
+        our_gestures = [15,16,17,18,19]
+        nothing = [0,2]
+        transf_targets = []
+        for t in targets:
+            if t in our_gestures:
+                val = 0
+            elif t in nothing:
+                val = 1
+            else:
+                val = 2
+            transf_targets.append(val)
+        targets = torch.LongTensor(transf_targets)
+
         data_time.update(time.time() - end_time)
         
         inputs = Variable(inputs)
@@ -476,7 +491,7 @@ def train_epoch(epoch, data_loader, model, criterion, optimizer,
 
         loss = criterion(outputs, targets)
         loss = loss.to(device)
-        acc = calculate_accuracy(outputs, targets)
+        acc = calculate_accuracy(outputs.data, targets.data)
 
         print(acc)
         print(accuracies)
@@ -521,9 +536,9 @@ def train_epoch(epoch, data_loader, model, criterion, optimizer,
         'lr': optimizer.param_groups[0]['lr']
     })
 
-    if epoch % 3 == 0:
+    if epoch % 1 == 0:
         save_file_path = os.path.join('result',
-                                      'save_{}.pth'.format(epoch))
+                                      '01i00_{}.pth'.format(epoch))
         states = {
             'epoch': epoch + 1,
             'state_dict': model.state_dict(),
@@ -542,17 +557,37 @@ def val_epoch(epoch, data_loader, model, criterion, logger):
     top1 = AverageMeter()
     top5 = AverageMeter()
 
+    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+
+    model = model.to(device)
+
     end_time = time.time()
     for i, (inputs, targets) in enumerate(data_loader):
         data_time.update(time.time() - end_time)
+
+        our_gestures = [15,16,17,18,19]
+        nothing = [0,2]
+        transf_targets = []
+        for t in targets:
+            if t in our_gestures:
+                val = 0
+            elif t in nothing:
+                val = 1
+            else:
+                val = 2
+            transf_targets.append(val)
+        targets = torch.LongTensor(transf_targets)
 
         targets = targets.to(device)
         with torch.no_grad():
             inputs = Variable(inputs)
             targets = Variable(targets)
+        inputs = inputs.to(device)
         outputs = model(inputs)
+        outputs = outputs.to(device)
         loss = criterion(outputs, targets)
-        prec1, prec5 = calculate_accuracy(outputs.data, targets.data, topk=(1,5))
+        loss = outputs.to(loss)
+        prec1, prec5 = calculate_accuracy(outputs.data, targets.data, topk=(1,2))
         top1.update(prec1, inputs.size(0))
         top5.update(prec5, inputs.size(0))
 
@@ -562,20 +597,28 @@ def val_epoch(epoch, data_loader, model, criterion, logger):
         end_time = time.time()
 
         if i % 10 ==0:
-          print('Epoch: [{0}][{1}/{2}]\t'
-              'Time {batch_time.val:.5f} ({batch_time.avg:.5f})\t'
-              'Data {data_time.val:.5f} ({data_time.avg:.5f})\t'
-              'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-              'Prec@1 {top1.val:.5f} ({top1.avg:.5f})\t'
-              'Prec@5 {top5.val:.5f} ({top5.avg:.5f})'.format(
-                  epoch,
-                  i + 1,
-                  len(data_loader),
-                  batch_time=batch_time,
-                  data_time=data_time,
-                  loss=losses,
-                  top1=top1,
-                  top5=top5))
+            print('Epoch ' + str(epoch))
+            print('Batch ' + str(i+1))
+            print('Len ' + str(len(data_loader)))
+            print('Top1 prec ' + str(top1.avg.item()))
+            print('Top5 prec' + str(top5.avg.item()))
+
+        #   print('Epoch: [{0}][{1}/{2}]\t'
+        #       'Time {batch_time.val:.5f} ({batch_time.avg:.5f})\t'
+        #       'Data {data_time.val:.5f} ({data_time.avg:.5f})\t'
+        #       'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+        #       'Prec@1 {top1.val:.5f} ({top1.avg:.5f})\t'
+        #       'Prec@5 {top5val:.5f} ({top5avg:.5f})'.format(
+        #           epoch,
+        #           i + 1,
+        #           len(data_loader),
+        #           batch_time=batch_time,
+        #           data_time=data_time,
+        #           loss=losses,
+        #           top1=top1,
+        #           top5val=top5.val[0].item(),
+        #           top5avg=top5.avg[0].item()
+        #           ))
 
     # logger.log({'epoch': epoch,
     #             'loss': losses.avg.item(),
@@ -586,7 +629,6 @@ def val_epoch(epoch, data_loader, model, criterion, logger):
 
     val_logger = Logger(
         os.path.join('result', 'val.log'), ['epoch', 'loss', 'acc'])
-
 
     val_logger.log({'epoch': epoch,
                 'loss': losses.avg,
@@ -600,11 +642,6 @@ def test(model,params):
 
     path_vid =r"D:/20bn-jester-v2"
     BASE_PATH = "D:"
-    #path_model = os.path.join(data_root, data_model, model_name)
-    path_labels = BASE_PATH + '/jester-v1-labels.csv'
-    path_train =  BASE_PATH + '/jester-v1-train.csv'
-    path_test =  BASE_PATH + '/jester-v1-test.csv'
-    path_val = BASE_PATH + '/jester-v1-validation.csv'
 
     test_data = Jester(
             path_vid,
@@ -622,7 +659,7 @@ def test(model,params):
 
     test_loader = torch.utils.data.DataLoader(
             test_data,
-            batch_size=1,
+            batch_size=32,
             shuffle=False,
             num_workers=0,
             pin_memory=True)
@@ -634,70 +671,86 @@ def test(model,params):
     batch_time = AverageMeter()
     top1 = AverageMeter()
     top5 = AverageMeter()
-    precisions = AverageMeter() #
-    recalls = AverageMeter()
     
     y_true = []
     y_pred = []
     end_time = time.time()
     print(test_loader)
     for i, (inputs, targets) in enumerate(test_loader):
-        device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
-        targets = targets.to(device)
+        # if (i==200):
+        #     break
+        print(str(i)+'/'+str(len(test_loader)))
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        start = time.time()
+        our_gestures = [15,16,17,18,19]
+        nothing = [0,2]
+        transf_targets = []
+        for t in targets:
+            if t in our_gestures:
+                val = 0
+            elif t in nothing:
+                val = 1
+            else:
+                val = 2
+            transf_targets.append(val)
+        targets = torch.LongTensor(transf_targets)
+
         #inputs = Variable(torch.squeeze(inputs), volatile=True)
+        model.eval()
         with torch.no_grad():
             inputs = Variable(inputs)
             targets = Variable(targets)
             start = time.time()
+            inputs = inputs.to(device)
+            targets = targets.to(device)
+            model.to(device)
             outputs = model(inputs)
-            #outputs = F.softmax(outputs)
             print('Time = ' + str(time.time()-start))
+            #outputs = F.softmax(outputs)
+            #print('Time = ' + str(time.time()-start))
             recorder.append(outputs.data.cpu().numpy().copy())
-            print(targets)
-            print(outputs.argmax(1))
+            ##print(targets)
+            #print(outputs.argmax(1))
         y_true.extend(targets.cpu().numpy().tolist())
         y_pred.extend(outputs.argmax(1).cpu().numpy().tolist())
-    print(y_true)
-    print(y_pred)
-    
-    prec1, prec5 = calculate_accuracy(outputs, targets, topk=(1,5))
-    precision = calculate_precision(outputs, targets) #
-    recall = calculate_recall(outputs,targets)
 
+        batch_time.update(time.time() - end_time)
+        end_time = time.time()
+        # print('[{0}/{1}]\t'
+        #         'Time {batch_time.val:.5f} ({batch_time.avg:.5f})\t'
+        #         'prec@1 {top1.avg:.5f} prec@5 {top5.avg:.5f}\t'
+        #         'precision {precision.val:.5f} ({precision.avg:.5f})\t'
+        #         'recall {recall.val:.5f} ({recall.avg:.5f})'.format(
+        #             i + 1,
+        #             len(test_loader),
+        #             batch_time=batch_time,
+        #             top1 =top1,
+        #             top5=top5,
+        #             precision = precisions,
+        #             recall = recalls)
+       
+        
+        prec1, prec5 = calculate_accuracy(outputs, targets, topk=(1,2))
 
-    top1.update(prec1, inputs.size(0))
-    top5.update(prec5, inputs.size(0))
-    precisions.update(precision, inputs.size(0))
-    recalls.update(recall,inputs.size(0))
+        top1.update(prec1, inputs.size(0))
+        top5.update(prec5, inputs.size(0))
 
-    batch_time.update(time.time() - end_time)
-    end_time = time.time()
-    print('[{0}/{1}]\t'
-            'Time {batch_time.val:.5f} ({batch_time.avg:.5f})\t'
-            'prec@1 {top1.avg:.5f} prec@5 {top5.avg:.5f}\t'
-            'precision {precision.val:.5f} ({precision.avg:.5f})\t'
-            'recall {recall.val:.5f} ({recall.avg:.5f})'.format(
-                i + 1,
-                len(test_loader),
-                batch_time=batch_time,
-                top1 =top1,
-                top5=top5,
-                precision = precisions,
-                recall = recalls))
+    print(len(test_loader))
+    print(top1.avg)
+    print(prec1.item())
+        
 
-finetune_classes = 700
-n_classes = 27
 # model_shell, parameters = generate_model(18, n_classes=700)
 # model = load_pretrained_model(model_shell, r"D:\TetrisProject\r3d18_K_200ep.pth", 'resnet',27)
-model = ResNet(BasicBlock, [2, 2, 2, 2], get_inplanes(),  n_classes=700)
-pretrain = torch.load(r"D:\TetrisProject\r3d18_K_200ep.pth")
+model = ResNet(BasicBlock, [2, 2, 2, 2], get_inplanes(),  n_classes=3)
+pretrain = torch.load(r"result\21i04_1.pth")
 model.load_state_dict(pretrain['state_dict'])
-model.fc = nn.Linear(model.fc.in_features,
-                               27)
+# model.fc = nn.Linear(model.fc.in_features,
+#                                3)
 model.fc = model.fc.cuda()
 
 parameters = get_fine_tuning_parameters(model, 4)
-
+#parameters = get_fine_tuning_parameters(model,0)
 #model, parameters = generate_model(18)
-train(model,parameters)
-#test(model)
+#train(model,parameters)
+test(model, parameters)
